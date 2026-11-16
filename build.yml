@@ -1,0 +1,75 @@
+name: Build Gokul AI APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup Java & Node
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Create WebView Android Project
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+        run: |
+          mkdir GokulAI && cd GokulAI
+          npm init -y
+          npm install @capacitor/core @capacitor/cli @capacitor/android
+          npx cap init "Gokul AI" "com.gokul.ai" --web-dir www
+          mkdir www
+          cat << 'EOF' > www/index.html
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+            <style>html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #000; }</style>
+          </head>
+          <body>
+            <script>window.location.replace("$APP_URL");</script>
+          </body>
+          </html>
+          EOF
+          sed -i "s|\$APP_URL|$APP_URL|g" www/index.html
+          npx cap add android
+          cat << 'EOF' > capacitor.config.json
+          {
+            "appId": "com.gokul.ai",
+            "appName": "Gokul AI",
+            "webDir": "www",
+            "server": {
+              "url": "$APP_URL",
+              "cleartext": true
+            }
+          }
+          EOF
+          sed -i "s|\$APP_URL|$APP_URL|g" capacitor.config.json
+          npx cap sync android
+
+      - name: Build Debug APK
+        run: |
+          cd GokulAI/android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload Gokul AI APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Gokul-AI-APK
+          path: GokulAI/android/app/build/outputs/apk/debug/app-debug.apk
+
